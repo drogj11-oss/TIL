@@ -1,0 +1,56 @@
+name: Create daily TIL
+
+on:
+  schedule:
+    # GitHub cron uses UTC. 15:05 UTC is 00:05 KST the next day.
+    - cron: "5 15 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: create-daily-til
+  cancel-in-progress: false
+
+jobs:
+  create:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Create today's TIL
+        env:
+          TZ: Asia/Seoul
+        shell: bash
+        run: |
+          date_value="$(date +%F)"
+          year="$(date +%Y)"
+          month="$(date +%m)"
+          file="TIL/${year}/${month}/${date_value}.md"
+
+          if [[ -e "$file" ]]; then
+            echo "$file already exists."
+            exit 0
+          fi
+
+          mkdir -p "$(dirname "$file")"
+          sed "s/YYYY-MM-DD/${date_value}/" template.md > "$file"
+          echo "Created $file"
+
+      - name: Commit and push
+        env:
+          TZ: Asia/Seoul
+        shell: bash
+        run: |
+          if [[ -z "$(git status --porcelain -- TIL/)" ]]; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- TIL/
+          git commit -m "docs: create daily TIL $(date +%F)"
+          git push
